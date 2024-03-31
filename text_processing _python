@@ -1,0 +1,14 @@
+#to clear emojis, first we have install the emoji
+pip install emoji 
+
+import pandas as pd
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+import time
+import re
+import string
+from nltk.corpus import stopwords
+from IPython.core.debugger import set_trace
+import emoji
+
