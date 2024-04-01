@@ -1,6 +1,7 @@
 #to clear emojis, first we have install the emoji
 pip install emoji 
 
+#importing libraries
 import pandas as pd
 import numpy as np
 import os
@@ -11,4 +12,299 @@ import string
 from nltk.corpus import stopwords
 from IPython.core.debugger import set_trace
 import emoji
+
+#set up arrays
+# list of blocks
+blocks = ['l[1-6]', 'lp', 'l81', 'lm81', 'p[1-7]', 'c[1-3]']
+# furniture conditions
+furniture_attributes = ['full','fnt','ntcb']
+# set up list to store data
+datarent = []
+databuy = []
+
+#set up funtions
+#remove Vietnamese tones
+def no_accent_vietnamese(s):
+    s = re.sub(r'[àáạảãâầấậẩẫăằắặẳẵ]', 'a', s)
+    s = re.sub(r'[ÀÁẠẢÃĂẰẮẶẲẴÂẦẤẬẨẪ]', 'A', s)
+    s = re.sub(r'[èéẹẻẽêềếệểễ]', 'e', s)
+    s = re.sub(r'[ÈÉẸẺẼÊỀẾỆỂỄ]', 'E', s)
+    s = re.sub(r'[òóọỏõôồốộổỗơờớợởỡ]', 'o', s)
+    s = re.sub(r'[ÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠ]', 'O', s)
+    s = re.sub(r'[ìíịỉĩ]', 'i', s)
+    s = re.sub(r'[ÌÍỊỈĨ]', 'I', s)
+    s = re.sub(r'[ùúụủũưừứựửữ]', 'u', s)
+    s = re.sub(r'[ƯỪỨỰỬỮÙÚỤỦŨ]', 'U', s)
+    s = re.sub(r'[ỳýỵỷỹ]', 'y', s)
+    s = re.sub(r'[ỲÝỴỶỸ]', 'Y', s)
+    s = re.sub(r'[Đ]', 'D', s)
+    s = re.sub(r'[đ]', 'd', s)
+    return s
+
+#convert common expressions
+#list of expression
+values_to_replace = {
+    'landmark plus': 'lp',
+    'landmark 81': 'l81', 'lm81' : 'l81',
+    'landmark 1': 'l1','landmark 2': 'l2','landmark 3': 'l3','landmark 4': 'l4','landmark 5': 'l5','landmark 6': 'l6',
+    'park 1': 'p1','park 2': 'p2','park 3': 'p3','park 4': 'p4','park 5': 'p5','park 6': 'p6','park 7': 'p7',
+    'central 1': 'c1','central 2': 'c2','central 3': 'c3',
+    'trieu' : 'tr', 'usd' : '$','vnd':'',',':'.', 
+#extra expression:
+    '1p30s' : '', 'view l81' : '', 'phong ngu' : 'pn',
+#extra furniture conversion:
+    'khong noi that' : 'ntcb','day du' : 'full', 'nha trong' : 'ntcb', 'noi that co ban' : 'ntcb',
+    'khong nt' : 'ntcb', 'fnt' : 'full', 'full nt' : 'full', 'ko noi that' : 'ntcb', 'ko nt' : 'ntcb',
+# common buying expression:
+    'hop dong mua ban' : 'hdmb', 'office tel' : 'ot', 'officetel' : 'ot', 
+    'so huu lau dai' : 'shvv', 'so huu vinh vien' : 'shvv', 'shld' : 'shvv',
+    'so hong' : 'pinkbook' , 'co so' : 'pinkbook' ,
+# convert "demand" signs:
+    'can tim' : 'demand', 'can mua' : 'demand', 'can thue' : 'demand', 'co nhu cau thue' : 'demand',
+    'co nhu cau mua' : 'demand', 'khach tim' :'demand', 'khach thue' : 'demand', 'khach mua' : 'demand',
+    'khach can' : 'demand', 
+}
+# create conversion function
+def replace_values(text):
+    for old_value, new_value in values_to_replace.items():
+        text = text.replace(old_value, new_value)
+    return text
+
+#convert money value
+def convert_zero(text):
+    # Tìm và thay thế "%00.000" thành "tr"
+    text = re.sub(r'(\d+)\.(\d+)00\.000', r'\1.\2tr', text)
+    # Tìm và thay thế "%00.000.000" thành "tỷ"
+    text = re.sub(r'(\d+)\.(\d+)00\.000\.000', r'\1.\2ty', text)
+    return text
+
+#formating value around "tr" and "ty"
+def convert_price_format(text):
+    # Tìm và thay thế các mẫu giá vào định dạng duy nhất
+    text = re.sub(r'(\d{1,3})\s*ty\s*(\d{1,3})', r'\1.\2 ty', text)
+    text = re.sub(r'(\d{1,3}\.\d{1,3})\s*ty', r'\1 ty', text)
+    text = re.sub(r'(\d{1,3})\s*tr\s*(\d{1,3})', r'\1.\2 tr', text)
+    text = re.sub(r'(\d{1,3}\.\d{1,3})\s*tr', r'\1 tr', text)
+    return text
+
+#set up data extract function for "rent" messages
+def individual_rent_extract(message, blocks):
+    ## slit messages
+    lines = message.split('\n')
+    current_xpn = None
+    current_block = None
+    current_furniture = None
+
+    for i, line in enumerate(lines):
+        xpn_matches = re.findall(r'[0-9]+\s*pn', line)
+        if xpn_matches:
+            current_xpn = xpn_matches[-1]
+        if current_xpn and i > 0:
+            lines[i] = f"{lines[i]} {current_xpn}"
+
+        block_matches = re.findall(r'|'.join(blocks), line)
+        if block_matches:
+            current_block = block_matches[-1]
+        if current_block and i > 0:
+            lines[i] = f"{lines[i]} {current_block}"
+            
+        furniture_matches = re.findall(r'|'.join(furniture_attributes), line)
+        if furniture_matches:
+            current_furniture = furniture_matches[-1]
+        if current_furniture and i > 0:
+            lines[i] = f"{lines[i]} {current_furniture}"
+
+    ## convert messages:
+    for line in lines:
+        block = None
+        bedroom = None
+        furniture = None
+        price_for_rent_vnd = None
+        price_for_rent_usd = None
+        area = None
+
+        for t in ["l1", "l2", "l3", "l4", "l5", "l6", "lp", "p1", "p2", "p3", "p4", "p5", "p6","p7", "lm81", "l81", "c1", "c2", "c3"]:
+            if t in line:
+                block = t
+            continue
+
+        bedroom_match = re.search(r'\d+pn|penthouse|shophouse', line)
+        if bedroom_match:
+            bedroom = bedroom_match.group()
+
+        if "ntcb" in line:
+            furniture = "NTCB"
+        elif "full" in line:
+            furniture = "Full"
+        else:
+            furniture = "Undefined"
+
+        price_for_rent_vnd_match = re.search(r'\b\d+([\.]\d+)?\s*tr\b|\b\d+([\.]\d+)?\s*trieu\b', line)
+        if price_for_rent_vnd_match:
+            price_for_rent_vnd = float(price_for_rent_vnd_match.group(0).replace('tr', '')) * 1000000
+        else:
+            price_for_rent_vnd = 0
+
+        price_for_rent_usd_match = re.search(r'\d+\$', line)
+        if price_for_rent_usd_match:
+            price_for_rent_usd = float(re.search(r'\d+', price_for_rent_usd_match.group()).group())
+        else:
+            price_for_rent_usd = 0
+
+        area_match = re.search(r'\d+([\.]\d+)?\s*m2', line)
+        if area_match:
+            area = float(area_match.group(0).replace('m2', ''))
+        else:
+            area = 0
+
+        if block and bedroom and furniture is not None and (price_for_rent_vnd != 0 or price_for_rent_usd != 0):
+            datarent.append({
+                "Block": block,
+                "Bedroom": bedroom,
+                "Furniture": furniture,
+                "Price For Rent VND": price_for_rent_vnd,
+                "Price For Rent USD": price_for_rent_usd,
+                "Area m2": area
+            })
+
+    return datarent
+
+#set up data extract function for "sell/buy" messages
+def individual_buy_extract(message, blocks):
+    ## line split
+    lines = message.split('\n')
+
+    ## set-up "x"bedroom and blocks
+    current_xpn = None #checked
+    current_block = None #checked
+    current_furniture = None #checked
+    #-------current_type = None 
+    #-------current_pinkbook = None
+    current_area = None 
+    # scan line to line -> # find the value "X+PN" in the line -> # then add "X+PN" in to everyline below of the messages
+    for i, line in enumerate(lines):
+    # find "X+PN" in the line 
+        xpn_matches = re.findall(r'[0-9]+\s*pn', line)
+        if xpn_matches:
+        # only accept the final "XPN" of the line
+            current_xpn = xpn_matches[-1]
+        # add "XPN" to all the lines below
+        if current_xpn and i > 0:
+            lines[i] = f"{lines[i]} {current_xpn}"
+        # find the value "block" in the line
+        block_matches = re.findall(r'|'.join(blocks), line)
+        if block_matches:
+        # fine the final "block"  value of the lines
+            current_block = block_matches[-1]
+        # add "block" into all lines below
+        if current_block and i > 0:
+            lines[i] = f"{lines[i]} {current_block}"
+        # find "furniture" in lines
+        furniture_matches = re.findall(r'|'.join(furniture_attributes), line)
+        if furniture_matches:
+            # take the final "furniture" value in the lines 
+            current_furniture = furniture_matches[-1]
+        # add "furniture" value into all lines below
+        if current_furniture and i > 0:
+            lines[i] = f"{lines[i]} {current_furniture}"
+         # find "area" in lines
+        area_matches = re.findall(r'(\d+\.?\d+?\s*m2)', line)
+        if area_matches:
+            # take the final "area" value in the lines 
+            current_area = area_matches [-1]
+        # add "area" value into all lines below
+        if current_area and i > 0:
+            lines[i] = f"{lines[i]} {current_area}"
+    for line in lines:
+    # set up temporary variables
+        block = None
+        bedroom = None
+        furniture = None
+        price_for_sale_vnd = None
+        price_for_sale_usd = None
+        apartment_type = None
+        pinkbook = None
+        area = None
+
+        # Find information about "Block"
+        for t in ["l1", "l2", "l3", "l4", "l5", "l6", "lp", "p1", "p2", "p3", "p4", "p5", "p6","p7", "lm81", "l81", "c1", "c2", "c3"]:
+            if t in line:
+                block = t
+            continue
+
+        # Find information about "Bedroom"
+        bedroom_match = re.search(r'\d+pn|penthouse|shophouse', line)
+             # Tìm thông tin về số phòng ngủ
+        if bedroom_match:
+            bedroom = bedroom_match.group()
+
+        # Find information about "Furniture"
+        if "ntcb" in line:
+            furniture = "NTCB"
+        elif "full" in line:
+            furniture = "Full"
+        else:
+            furniture = "Undefined"
+
+        # Find info about "Price For sale VND"
+        price_for_sale_vnd_match = re.search(r'\b\d+([\.]\d+)?\s*ty\b', line)
+        if price_for_sale_vnd_match:
+            price_for_sale_vnd = float(price_for_sale_vnd_match.group(0).replace('ty', '')) * 1000000000
+        else:
+            price_for_sale_vnd = 0
+        # Find info about "Price For sale USD"
+        price_for_sale_usd_match = re.search(r'\d+\s*\$', line)
+        if price_for_sale_usd_match:
+            price_for_sale_usd = float(re.search(r'\d+', price_for_sale_usd_match.group()).group())
+        else:
+            price_for_sale_usd = 0 
+
+        # info about "Area (m2)"
+        area_match = re.search(r'\d+([\.]\d+)?\s*m2', line)
+        if area_match:
+            area = float(area_match.group(0).replace('m2', ''))
+        else:
+            area = 0
+        # is the apartment type OT/SHVV?
+        if "shvv" in line:
+            apartment_type = "SHVV"
+        elif "ot" in line:
+            apartment_type = "OT"
+        else:
+            apartment_type = "Undefined"
+        # pinkbook condition:
+        if "pinkbook" in line:
+            pinkbook = "yes"
+        elif "ot" in line:
+            pinkbook = "no"
+        elif "hdmb" in line:
+            pinkbook = "no"
+        else:
+            pinkbook = "Undefined"
+
+    # add information about the list
+        if block and bedroom and furniture is not None and (price_for_sale_vnd !=0 or price_for_sale_usd !=0) :
+            databuy.append({
+                "Block": block,
+                "Bedroom": bedroom,
+                "Furniture": furniture,
+                "Price For Sale VND": price_for_sale_vnd,
+                "Price For Sale USD": price_for_sale_usd ,
+                "Area m2": area,
+                "Apartment Type": apartment_type,
+                "Pinkbook condition" : pinkbook,
+            })
+#PREPROCESSING
+#import Raw data:
+df_raw =  pd.read_csv("D:/DESKTOP/HKM data 280723/raw/Zalo-Data-Gia ban-Gia thue-21122023.csv")
+#convert string
+df_raw['Text'] = df_raw['Text'].astype(str)
+# apply all function into "Text"
+df_raw['Text'] = df_raw['Text'].str.lower().apply(emoji.replace_emoji).apply(no_accent_vietnamese).apply(replace_values).apply(convert_zero).apply(convert_price_format)
+# only need information about inventory in the market, remove demand texts
+df_raw_inventory = df_raw[~df_raw['Text'].str.contains('demand', case=False)].reset_index()
+
+#set up dataraw_rent and dataraw_buy
+df_raw_buy = df_raw_inventory[df_raw_inventory['Text'].str.contains('ty', case=False)].reset_index(drop=True)
+df_raw_rent = df_raw_inventory[df_raw_inventory['Text'].str.contains('trieu|tr', case=False)].reset_index(drop=True)
 
