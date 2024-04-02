@@ -308,3 +308,57 @@ df_raw_inventory = df_raw[~df_raw['Text'].str.contains('demand', case=False)].re
 df_raw_buy = df_raw_inventory[df_raw_inventory['Text'].str.contains('ty', case=False)].reset_index(drop=True)
 df_raw_rent = df_raw_inventory[df_raw_inventory['Text'].str.contains('trieu|tr', case=False)].reset_index(drop=True)
 
+#Extract rent infomation
+for index, row in df_raw_rent.iterrows():
+    text = row['Text']
+    text = individual_rent_extract(text, blocks)
+# create DF_RENT
+df_rent = pd.DataFrame(datarent)
+#Extract buy information
+for index, row in df_raw_buy.iterrows():
+    text = row['Text']
+    text = individual_buy_extract(text, blocks)
+df_buy = pd.DataFrame(databuy)
+
+#SUMMARIZE COLLECTED DATA
+#RENT DATA
+#convert USD -> VND
+def replace_vnd_with_usd(df):
+    df['Price For Rent VND'] = df.apply(lambda row: row['Price For Rent USD'] * 23500 if row['Price For Rent VND'] == 0 else row['Price For Rent VND'], axis=1)
+    return df
+#apply in dataframe 
+df_rent = replace_vnd_with_usd(df_rent)
+
+grouped_df_rent = df_rent.groupby(['Block', 'Bedroom', 'Furniture']).agg({
+    'Price For Rent VND': ['min', 'max', 'mean'],
+}).reset_index()
+
+# change collumn
+grouped_df_rent.columns = ['Block', 'Bedroom', 'Furniture', 'Min Rent Price', 'Max Rent Price', 'Mean Rent Price']
+#add time collected
+
+#import datetime
+grouped_df_rent['time_collected'] = datetime.datetime.now().date()
+
+#BUY DATA
+def replace_vnd_with_usd(df):
+    df['Price For Sale VND'] = df.apply(lambda row: row['Price For Sale USD'] * 23500 if row['Price For Sale VND'] == 0 else row['Price For Sale VND'], axis=1)
+    return df
+df_buy = replace_vnd_with_usd(df_buy)
+
+# Convert Apartment into "SHVV" if Pinkbook condition is "yes"
+df_buy.loc[df_buy['Pinkbook condition'] == 'yes', 'Apartment Type'] = 'SHVV'
+
+grouped_df_buy = df_buy.groupby(['Block', 'Bedroom', 'Furniture', 'Apartment Type', 'Pinkbook condition']).agg({
+    'Price For Sale VND': ['min', 'max', 'mean'],
+}).reset_index()
+
+# convert collumns' name
+grouped_df_buy.columns = ['Block', 'Bedroom', 'Furniture', 'Apartment Type', 'Pinkbook condition', 'Min Sale Price', 'Max Sale Price', 'Mean Sale Price']
+
+#import datetime
+grouped_df_buy['time_collected'] = datetime.datetime.now().date()
+
+#save as excel files 
+grouped_df_rent.to_excel('beta_rent_shorted_output_151223.xlsx', index=True)
+grouped_df_buy.to_excel('beta_buy_shorted_output_151223.xlsx', index=True)
