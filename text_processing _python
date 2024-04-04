@@ -360,5 +360,5 @@ grouped_df_buy.columns = ['Block', 'Bedroom', 'Furniture', 'Apartment Type', 'Pi
 grouped_df_buy['time_collected'] = datetime.datetime.now().date()
 
 #save as excel files 
-grouped_df_rent.to_excel('beta_rent_shorted_output_151223.xlsx', index=True)
-grouped_df_buy.to_excel('beta_buy_shorted_output_151223.xlsx', index=True)
+grouped_df_rent.to_csv('beta_rent_shorted_output_151223.csv', index=True)
+grouped_df_buy.to_csv('beta_buy_shorted_output_151223.csv', index=True)
