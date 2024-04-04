@@ -1,1 +1,44 @@
+--- cập nhật dữ liệu trong bảng
+DROP TABLE IF EXISTS vcp_rent_price_tracking;
+CREATE TABLE vcp_rent_price_tracking (
+    ID INT,
+    Block VARCHAR(10),
+    Bedroom VARCHAR(10),
+    Furniture VARCHAR(10),
+    MinRentPrice FLOAT,
+    MaxRentPrice FLOAT,
+    MeanRentPrice FLOAT,
+    TimeCollected DATE
+);
 
+BULK INSERT vcp_rent_price_tracking
+FROM 'D:\DESKTOP\HKM data 280723\beta_rent_shorted_output_040424.csv'
+WITH (
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n',
+    FIRSTROW = 2,
+    CODEPAGE = 'ACP'
+);
+
+DROP TABLE IF EXISTS vcp_buy_price_tracking;
+CREATE TABLE vcp_buy_price_tracking (
+ID INT,
+    Block VARCHAR(10),
+    Bedroom VARCHAR(10),
+    Furniture VARCHAR(20),
+    ApartmentType VARCHAR(10),
+    PinkbookCondition VARCHAR(10),
+    MinSalePrice FLOAT,
+    MaxSalePrice FLOAT,
+    MeanSalePrice FLOAT,
+    TimeCollected DATE
+);
+
+BULK INSERT vcp_buy_price_tracking
+FROM 'D:\DESKTOP\HKM data 280723\beta_buy_shorted_output_040424.csv'
+WITH (
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n',
+    FIRSTROW = 2,
+    CODEPAGE = 'ACP'
+);
