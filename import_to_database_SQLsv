@@ -42,3 +42,6 @@ WITH (
     FIRSTROW = 2,
     CODEPAGE = 'ACP'
 );
+
+--- so sánh số liệu của từng trục riêng biệt theo thời gian
+
